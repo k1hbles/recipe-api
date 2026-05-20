@@ -117,21 +117,21 @@ async function main() {
     // GET /recipes & using Mongo
     app.get('/recipes', async (req, res) => {
         try {
-            const { name, cuisine, tags, ingredients, minPrepTime, maxPrepTime } = req.query;
+            const { recipeName, cuisine, tags, ingredients, minPrepTime, maxPrepTime } = req.query;
 
-            const query = {};
+            const criteria = {};
 
-            if (name) {
-                query.name = { $regex: name, $options: 'i'};
+            if (recipeName) {
+                criteria.name = { $regex: recipeName, $options: 'i'};
             }
             if (cuisine) {
-                query['cuisine.name'] = { $regex: cuisine, $options: 'i' };
+                criteria['cuisine.name'] = { $regex: cuisine, $options: 'i' };
             }
             if (tags) {
-                query['tags.name'] = { $in: tags.split(',') };
+                criteria['tags.name'] = { $in: tags.split(',') };
             }
             if (ingredients) {
-                query['ingredients.name'] = {
+                criteria['ingredients.name'] = {
                     $all : ingredients.split(',').map(i => new RegExp(i, 'i'))
                 };
             }
@@ -141,7 +141,7 @@ async function main() {
                 if (maxPrepTime) query.prepTime.$lte = Number(maxPrepTime);
             }
 
-            const recipes = await db.collection('recipes').find(query).project({
+            const recipes = await db.collection('recipes').find(criteria).project({
                 name: 1,
                 'cuisine.name':1,
                 'tags.name': 1,
