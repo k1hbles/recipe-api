@@ -9,6 +9,9 @@ const jwt = require('jsonwebtoken');
 const { ObjectId } = require('mongodb');
 require('dotenv').config();
 
+const { GoogleGenAI } = require('@google/genai');
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
 const { connect } = require('./db');
 
 const mongoUri = process.env.MONGO_URI;
@@ -443,9 +446,9 @@ async function main() {
             if (req.body.cuisine) {
                 const cuisineDoc = await db.collection('cuisines').findOne({ name: req.body.cuisine });
                 if (!cuisineDoc) {
-                    return res.status(400).json({ error: 'Invalid cuisine'});
+                    return res.status(400).json({ error: 'Invalid cuisine' });
                 }
-                updates.cuisine = { _id: cuisineDoc._id, name: cuisineDoc.name }; 
+                updates.cuisine = { _id: cuisineDoc._id, name: cuisineDoc.name };
             }
             if (req.body.tags) {
                 const tagDocs = await db.collection('tags').find({ name: { $in: req.body.tags } }).toArray();
@@ -455,8 +458,8 @@ async function main() {
                 updates.tags = tagDocs.map(tags => ({ _id: tags._id, name: tags.name }));
             }
 
-            if (Object.keys(updates).length ===0) {
-                return res.status(400).json({ error: 'No fields provided to update'});
+            if (Object.keys(updates).length === 0) {
+                return res.status(400).json({ error: 'No fields provided to update' });
             }
             await db.collection('recipes').updateOne(
                 { _id: new ObjectId(recipeId) },
@@ -469,6 +472,62 @@ async function main() {
             res.status(500).json({ error: 'Interna; server error' });
         }
     });
+
+    // Google LLM /GET /ai/search
+    app.get('/ai/search', async (req, res) => {
+        try {
+            const userMessage = req.body.userMessage;
+            if (!userMessage) {
+                return res.status(400).json({ error: 'Please provide a query' })
+            }
+            const allCuisines = await db.collection('cuisines').distinct('name');
+            const allTags = await db.collection('tags').distinct(name);
+
+            // Ask GEMINI
+            const aiResponse = await genAI.models.generateContent({
+                model: "gemini-2.5-flash-lite",
+                contents: `You are a helpful assistant. Convert natural language into recipe search filter"
+
+            Available cuisines: {$allCuisines.join(', ')}
+            Available tags: ${allTags.join(', ')}
+            
+            Return only a JSON object with an array of "cuisines" and "tags", using the values listed above. No explaination needed and md.
+        
+        User query: ${query}`
+            });
+
+            let rawText = aiResponse.candidates[0].content.parts[0].text;
+            rawText = rawText.replace('```json', '').replace('```', '').trim();
+            const filters = JSON.parse(rawText);
+
+            const criteria = {};
+            if (filters.cuisine && filters.cuisines.length > 0) {
+                criteria['cuisine.name'] = { $in: filters.cuisines };
+            }
+            if (filters.tags && filters.tags.length > 0) {
+                criteria['tags.name'] = { $in: filters.tags };
+            }
+
+            const recipes = await db.collection('recipes').find(criteria).toArray();
+
+            res.json({
+                query: query,
+                intepretedAs: filters,
+                recipes: recipes
+            });
+            
+
+        } catch (e) {
+            console.error('AI search error', e);
+            res.sendStatus(500);
+        }
+    });
+    
+
+
+
+
+
 
     // DELETE /recipes/:recipeId/reviews/:reviewid - Delete a review
     app.delete('/recipes/:recipeId/reviews/:reviewId', verifyToken, async (req, res) => {
@@ -486,9 +545,9 @@ async function main() {
                 return res.status(404).json({ error: 'Review not found' });
             }
             if (review.userId.toString() !== req.user.user_id) {
-                return res.status(403).json({ error: 'You do not own this revoew' });
+                return res.status(403).json({ error: 'You do not own this review' });
             }
-            
+
 
             await db.collection('recipes').updateOne(
                 { _id: new ObjectId(recipeId) },
