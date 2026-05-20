@@ -136,9 +136,9 @@ async function main() {
                 };
             }
             if (minPrepTime || maxPrepTime) {
-                query.prepTime = {};
-                if (minPrepTime) query.prepTime.$gte = Number(minPrepTime);
-                if (maxPrepTime) query.prepTime.$lte = Number(maxPrepTime);
+                criteria.prepTime = {};
+                if (minPrepTime) criteria.prepTime.$gte = Number(minPrepTime);
+                if (maxPrepTime) criteria.prepTime.$lte = Number(maxPrepTime);
             }
 
             const recipes = await db.collection('recipes').find(criteria).project({
