@@ -476,24 +476,24 @@ async function main() {
     // Google LLM /GET /ai/search
     app.get('/ai/search', async (req, res) => {
         try {
-            const userMessage = req.body.userMessage;
+            const userMessage = req.query.q;
             if (!userMessage) {
                 return res.status(400).json({ error: 'Please provide a query' })
             }
             const allCuisines = await db.collection('cuisines').distinct('name');
-            const allTags = await db.collection('tags').distinct(name);
+            const allTags = await db.collection('tags').distinct('name');
 
             // Ask GEMINI
             const aiResponse = await genAI.models.generateContent({
                 model: "gemini-2.5-flash-lite",
-                contents: `You are a helpful assistant. Convert natural language into recipe search filter"
+                contents: `You are a helpful assistant. Convert natural language into recipe search filter
 
-            Available cuisines: {$allCuisines.join(', ')}
+            Available cuisines: ${allCuisines.join(', ')}
             Available tags: ${allTags.join(', ')}
             
             Return only a JSON object with an array of "cuisines" and "tags", using the values listed above. No explaination needed and md.
         
-        User query: ${query}`
+        User query: ${userMessage}`
             });
 
             let rawText = aiResponse.candidates[0].content.parts[0].text;
@@ -501,7 +501,7 @@ async function main() {
             const filters = JSON.parse(rawText);
 
             const criteria = {};
-            if (filters.cuisine && filters.cuisines.length > 0) {
+            if (filters.cuisines && filters.cuisines.length > 0) {
                 criteria['cuisine.name'] = { $in: filters.cuisines };
             }
             if (filters.tags && filters.tags.length > 0) {
@@ -511,18 +511,18 @@ async function main() {
             const recipes = await db.collection('recipes').find(criteria).toArray();
 
             res.json({
-                query: query,
-                intepretedAs: filters,
+                query: userMessage,
+                interpretedAs: filters,
                 recipes: recipes
             });
-            
+
 
         } catch (e) {
             console.error('AI search error', e);
             res.sendStatus(500);
         }
     });
-    
+
 
 
 
@@ -565,7 +565,8 @@ async function main() {
 main();
 
 // start server
-app.listen(8080, function () {
+const PORT = process.env.PORT || 8080
+app.listen(PORT, function () {
     console.log("Server has started on port 8080")
 });
 
